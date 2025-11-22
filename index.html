@@ -900,6 +900,7 @@
         });
     </script>
     
+
 <script>
 // ===================================
 // COB CORN POS - UPDATED SYSTEM V2
@@ -983,119 +984,16 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
-// ============================================================================
-// GOOGLE SHEETS REAL-TIME SYNC - COMPLETE IMPLEMENTATION
-// ============================================================================
-
-// Sync fulfilled order to Google Sheets
-async function syncOrderToSheets(order) {
-    if (!CONFIG.googleAppsScriptURL) return;
-
+function updateTodayCash() {
     try {
-        const response = await fetch(CONFIG.googleAppsScriptURL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveOrder',
-                order: {
-                    orderNumber: order.orderNumber,
-                    date: order.date,
-                    time: order.time || new Date().toLocaleTimeString(),
-                    customerName: order.customerName || '',
-                    items: order.items,
-                    subtotal: order.subtotal,
-                    tax: order.tax,
-                    total: order.total,
-                    paymentMethod: order.paymentMethod,
-                    status: order.status,
-                    specialNotes: order.specialNotes || ''
-                }
-            })
-        });
-        console.log('✅ Order synced to Google Sheets:', order.orderNumber);
-    } catch (error) {
-        console.error('❌ Error syncing order to Sheets:', error);
-    }
-}
-
-// Sync all menu items to Google Sheets
-async function syncMenuToSheets() {
-    if (!CONFIG.googleAppsScriptURL) return;
-
-    try {
-        const response = await fetch(CONFIG.googleAppsScriptURL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveMenu',
-                menuItems: menuItems
-            })
-        });
-        console.log('✅ Menu synced to Google Sheets');
-    } catch (error) {
-        console.error('❌ Error syncing menu to Sheets:', error);
-    }
-}
-
-// Sync inventory to Google Sheets
-async function syncInventoryToSheets() {
-    if (!CONFIG.googleAppsScriptURL) return;
-
-    try {
-        const response = await fetch(CONFIG.googleAppsScriptURL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveInventory',
-                inventory: inventory
-            })
-        });
-        console.log('✅ Inventory synced to Google Sheets');
-    } catch (error) {
-        console.error('❌ Error syncing inventory to Sheets:', error);
-    }
-}
-
-// Sync expense to Google Sheets
-async function syncExpenseToSheets(expense) {
-    if (!CONFIG.googleAppsScriptURL) return;
-
-    try {
-        const response = await fetch(CONFIG.googleAppsScriptURL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveExpense',
-                expense: expense
-            })
-        });
-        console.log('✅ Expense synced to Google Sheets');
-    } catch (error) {
-        console.error('❌ Error syncing expense to Sheets:', error);
-    }
-}
-
-// Sync EOD data to Google Sheets
-async function syncEODToSheets(eodData) {
-    if (!CONFIG.googleAppsScriptURL) return;
-
-    try {
-        const response = await fetch(CONFIG.googleAppsScriptURL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveEOD',
-                eodData: eodData
-            })
-        });
-        console.log('✅ EOD data synced to Google Sheets');
-    } catch (error) {
-        console.error('❌ Error syncing EOD to Sheets:', error);
+        const today = getTodayDateString();
+        const cash = orders
+            .filter(o => o.status === 'fulfilled' && o.paymentMethod === 'cash' && o.date === today)
+            .reduce((sum, o) => sum + o.total, 0);
+        const cashEl = document.getElementById('todayCash');
+        if (cashEl) cashEl.textContent = cash.toFixed(2);
+    } catch(e) {
+        console.error('updateTodayCash error:', e);
     }
 }
 
@@ -1103,6 +1001,7 @@ function initializeApp() {
     checkDailyReset();
     loadMenuItems();
     loadInventoryDisplay();
+    try { updateTodayCash(); } catch(e) {}
     updateReports();
     loadPendingOrdersInline();
     loadExpenseCategories();
@@ -1123,16 +1022,6 @@ function setTodayDate() {
 
 function getTodayDateString() {
     return new Date().toLocaleDateString('en-IN');
-}
-
-
-function updateTodayCash() {
-    const today = getTodayDateString();
-    const cash = orders
-        .filter(o => o.status === 'fulfilled' && o.paymentMethod === 'cash' && o.date === today)
-        .reduce((sum, o) => sum + o.total, 0);
-    const cashEl = document.getElementById('todayCash');
-    if (cashEl) cashEl.textContent = cash.toFixed(2);
 }
 
 function formatDateForDisplay(date) {
@@ -1369,7 +1258,6 @@ function editMenuItem(itemId) {
     item.consumptionPerUnit = parseFloat(newConsumption);
 
     localStorage.setItem('cobCornMenuItems', JSON.stringify(menuItems));
-    syncMenuToSheets();
     loadMenuItems();
     showMessage('✓ Item updated', 'success');
 }
@@ -1778,7 +1666,7 @@ function saveOrder() {
     orders.push(order);
     localStorage.setItem('cobCornOrders', JSON.stringify(orders));
 
-    // NOTE: Cash NOT updated here - only when order fulfilled
+    // Cash updated when order fulfilled, not here
 
     showMessage('✓ Order saved: ' + orderNumber, 'success');
 
@@ -1861,6 +1749,7 @@ function markFulfilledInline(orderNumber) {
 
         localStorage.setItem('cobCornOrders', JSON.stringify(orders));
         loadPendingOrdersInline();
+        try { updateTodayCash(); } catch(e) {}
         showMessage('✓ Order fulfilled - Inventory updated', 'success');
 
         // Sync to Google Sheets (fulfilled orders only)
@@ -1874,6 +1763,7 @@ function cancelOrderInline(orderNumber) {
         orders = orders.filter(o => o.orderNumber !== orderNumber);
         localStorage.setItem('cobCornOrders', JSON.stringify(orders));
         loadPendingOrdersInline();
+        try { updateTodayCash(); } catch(e) {}
         showMessage('✓ Order cancelled', 'success');
 
         // Sync to Google Sheets
@@ -2227,183 +2117,9 @@ function saveBillFormat() {
 
 function printBill() {
     if (currentOrder.items.length === 0) {
-        alert('No items in order. Add items before printing.');
+        alert('No items to print');
         return;
     }
-
-    // Generate bill HTML
-    const billHTML = generateBillHTML(currentOrder);
-
-    // Open print window
-    const printWindow = window.open('', '', 'width=300,height=600');
-
-    if (!printWindow) {
-        alert('Pop-up blocked. Please allow pop-ups for this site.');
-        return;
-    }
-
-    // Write HTML to new window
-    printWindow.document.write(billHTML);
-    printWindow.document.close();
-
-    // Wait for content to load then print
-    printWindow.onload = function() {
-        printWindow.print();
-        // Close window after print dialog closes
-        printWindow.onafterprint = function() {
-            printWindow.close();
-        };
-    };
-}
-
-function generateBillHTML(order) {
-    const billDate = new Date().toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    });
-    const billTime = new Date().toLocaleTimeString('en-IN', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-
-    let itemsHTML = '';
-    order.items.forEach(item => {
-        const itemTotal = item.price * item.quantity;
-        itemsHTML += `
-            <tr>
-                <td style="text-align:left; padding:5px 0;">${item.name}</td>
-                <td style="text-align:center; padding:5px 5px;">${item.quantity}</td>
-                <td style="text-align:right; padding:5px 0;">₹${item.price.toFixed(2)}</td>
-                <td style="text-align:right; padding:5px 0;">₹${itemTotal.toFixed(2)}</td>
-            </tr>
-        `;
-    });
-
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Bill - ${order.orderNumber || 'Receipt'}</title>
-    <style>
-        @media print {
-            body { margin: 0; padding: 10px; }
-        }
-        body {
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            width: 300px;
-            margin: 0 auto;
-            padding: 10px;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 15px;
-            border-bottom: 2px dashed #000;
-            padding-bottom: 10px;
-        }
-        .business-name {
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .bill-info {
-            margin: 10px 0;
-            font-size: 11px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 10px 0;
-        }
-        .totals {
-            border-top: 2px dashed #000;
-            padding-top: 10px;
-            margin-top: 10px;
-        }
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 3px 0;
-        }
-        .grand-total {
-            font-size: 14px;
-            font-weight: bold;
-            border-top: 2px solid #000;
-            padding-top: 5px;
-            margin-top: 5px;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 2px dashed #000;
-            font-size: 11px;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="business-name">${CONFIG.billFormat.businessName}</div>
-        <div>${CONFIG.billFormat.address1}</div>
-        <div>${CONFIG.billFormat.address2}</div>
-        <div>${CONFIG.billFormat.phone}</div>
-    </div>
-
-    <div class="bill-info">
-        <div><strong>Date:</strong> ${billDate} ${billTime}</div>
-        ${order.orderNumber ? `<div><strong>Order #:</strong> ${order.orderNumber}</div>` : ''}
-        ${order.customerName ? `<div><strong>Customer:</strong> ${order.customerName}</div>` : ''}
-    </div>
-
-    <table>
-        <thead>
-            <tr style="border-bottom: 1px solid #000;">
-                <th style="text-align:left; padding:5px 0;">Item</th>
-                <th style="text-align:center; padding:5px 5px;">Qty</th>
-                <th style="text-align:right; padding:5px 0;">Price</th>
-                <th style="text-align:right; padding:5px 0;">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${itemsHTML}
-        </tbody>
-    </table>
-
-    <div class="totals">
-        <div class="total-row">
-            <span>Subtotal:</span>
-            <span>₹${order.subtotal.toFixed(2)}</span>
-        </div>
-        <div class="total-row">
-            <span>Tax:</span>
-            <span>₹${order.tax.toFixed(2)}</span>
-        </div>
-        <div class="total-row grand-total">
-            <span>TOTAL:</span>
-            <span>₹${order.total.toFixed(2)}</span>
-        </div>
-        <div class="total-row" style="margin-top:10px;">
-            <span>Payment:</span>
-            <span>${order.paymentMethod === 'cash' ? 'CASH' : 'UPI/DIGITAL'}</span>
-        </div>
-    </div>
-
-    ${order.specialNotes ? `
-    <div style="margin:10px 0; padding:10px 0; border-top:1px dashed #000;">
-        <strong>Notes:</strong> ${order.specialNotes}
-    </div>
-    ` : ''}
-
-    <div class="footer">
-        <div>Thank you for your order!</div>
-        <div style="margin-top:5px;">Visit us again! 🌽</div>
-    </div>
-</body>
-</html>
-    `;
-}
 
     loadBillFormat();
     const billHTML = `
